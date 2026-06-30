@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import time
 import io
 import aiohttp
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 import speech_recognition as sr
 from pydub import AudioSegment
 from cloakbrowser import launch_async
