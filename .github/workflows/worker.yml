@@ -20,22 +20,53 @@ jobs:
       with:
         python-version: '3.12'
 
+    - name: Check for duplicate concurrent runs
+      id: check-concurrency
+      env:
+        GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+      run: |
+        python -c "
+        import json, subprocess, os, sys
+        try:
+            res = subprocess.run(['gh', 'run', 'list', '--workflow', 'worker.yml', '--status', 'in_progress', '--json', 'databaseId'], capture_output=True, text=True)
+            runs = json.loads(res.stdout)
+            current_run_id = int(os.environ.get('GITHUB_RUN_ID', 0))
+            other_runs = [r for r in runs if r['databaseId'] != current_run_id]
+            if other_runs:
+                print('Detected other active runs of this workflow. Skipping to prevent duplicate concurrency.')
+                with open(os.environ['GITHUB_ENV'], 'a') as f:
+                    f.write('SKIP_WORKER=true\n')
+            else:
+                print('No other active runs. Proceeding.')
+                with open(os.environ['GITHUB_ENV'], 'a') as f:
+                    f.write('SKIP_WORKER=false\n')
+        except Exception as e:
+            print(f'Error checking concurrency: {e}. Defaulting to run.')
+            with open(os.environ['GITHUB_ENV'], 'a') as f:
+                f.write('SKIP_WORKER=false\n')
+        "
+
     - name: Install System Dependencies (FFmpeg)
+      if: env.SKIP_WORKER != 'true'
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
 
     - name: Install Python Dependencies
+      if: env.SKIP_WORKER != 'true'
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
     - name: Install Playwright System Dependencies
+      if: env.SKIP_WORKER != 'true'
       run: |
         python -m playwright install-deps
         # Installs system libraries needed for Chromium to run on Linux headless.
 
     - name: Run Worker Agent
+      if: env.SKIP_WORKER != 'true'
       env:
         # Gateway base URL (where the main API is hosted)
         GATEWAY_URL: ${{ secrets.GATEWAY_URL || 'https://api.wanzdoan.tech' }}
@@ -52,7 +83,7 @@ jobs:
         python worker.py
 
     - name: Trigger next worker run (Auto-restart chain)
-      if: always() # Trigger next run even if current run fails/timeouts
+      if: always() && env.SKIP_WORKER != 'true'
       env:
         # We need a Personal Access Token (PAT) with 'workflow' scope saved as a secret (GH_PAT)
         # to trigger workflow runs, since default GITHUB_TOKEN blocks self-triggering loops.
