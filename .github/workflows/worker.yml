@@ -40,6 +40,9 @@ jobs:
         # Gateway base URL (where the main API is hosted)
         GATEWAY_URL: ${{ secrets.GATEWAY_URL || 'https://api.wanzdoan.tech' }}
         
+        # Unique worker identifier matching the GitHub repository name
+        WORKER_ID: ${{ github.repository }}
+        
         # Max execution time (3300 seconds = 55 minutes)
         MAX_RUN_TIME: 3300
         
