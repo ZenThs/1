@@ -214,7 +214,7 @@ class ReCaptchaSolver:
 
             if has_checkbox:
                 # Click checkbox (standard v2)
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(0.5)
                 await checkbox.click()
                 
                 # Wait to see if solved instantly or challenge appears
@@ -269,19 +269,26 @@ class ReCaptchaSolver:
                 audio_button = bframe_locator.locator("#recaptcha-audio-button")
                 await audio_button.wait_for(state="visible", timeout=10000)
                 await audio_button.click()
-                await asyncio.sleep(2.5)
+                
+                # Wait dynamically for either the download link OR rate limit header to appear
+                download_link = bframe_locator.locator(".rc-audiochallenge-tdownload-link")
+                rate_limit_header = bframe_locator.locator(".rc-doscaptcha-header")
+                
+                start_wait = time.time()
+                while time.time() - start_wait < 6:
+                    if await download_link.is_visible() or await rate_limit_header.is_visible():
+                        break
+                    await asyncio.sleep(0.1)
                 
                 # Check for rate limit
-                rate_limit_header = bframe_locator.locator(".rc-doscaptcha-header")
                 if await rate_limit_header.is_visible():
                     text = await rate_limit_header.inner_text()
                     if "Try again later" in text or "automated" in text or "phần mềm tự động" in text:
                         raise Exception("Rate limit reached: Google has flagged this request. Try again later or use a different proxy.")
                 
                 # Wait for audio download link
-                download_link = bframe_locator.locator(".rc-audiochallenge-tdownload-link")
                 try:
-                    await download_link.wait_for(state="visible", timeout=10000)
+                    await download_link.wait_for(state="visible", timeout=5000)
                     audio_url = await download_link.get_attribute("href")
                 except Exception:
                     # Double check rate limit
@@ -313,10 +320,21 @@ class ReCaptchaSolver:
                 # Click verify
                 verify_button = bframe_locator.locator("#recaptcha-verify-button")
                 await verify_button.click()
-                await asyncio.sleep(3)
+                
+                # Poll dynamically for the token or errors to appear instead of hardcoded sleep
+                token = None
+                start_wait = time.time()
+                while time.time() - start_wait < 5:
+                    token = await get_recaptcha_token(page)
+                    if token:
+                        break
+                    # Also check if an error occurred (Google rejected the answer)
+                    error_msg_loc = bframe_locator.locator(".rc-audiochallenge-error-message")
+                    if await error_msg_loc.is_visible():
+                        break
+                    await asyncio.sleep(0.1)
                 
                 # Check if token is ready
-                token = await get_recaptcha_token(page)
                 if token:
                     end_time = time.time()
                     score = None
