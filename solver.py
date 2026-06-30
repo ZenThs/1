@@ -113,7 +113,8 @@ class ReCaptchaSolver:
         max_retries: int = 3,
         humanize: bool = True,
         check_score: bool = False,
-        debug: bool = False
+        debug: bool = False,
+        browser: Optional[Any] = None
     ) -> str:
         """
         Asynchronously solve reCAPTCHA v2 using cloakbrowser.
@@ -128,6 +129,7 @@ class ReCaptchaSolver:
             humanize: Enable cloakbrowser's human-like behavior simulator.
             check_score: If True, checks the solved token score via 2captcha API.
             debug: Enable debug logging.
+            browser: Optional existing Playwright browser instance to reuse.
             
         Returns:
             The reCAPTCHA response token.
@@ -149,13 +151,15 @@ class ReCaptchaSolver:
                 if proxy.get("password"):
                     pw_proxy["password"] = proxy["password"]
 
-        # Launch cloakbrowser
-        browser = await launch_async(
-            headless=headless,
-            proxy=pw_proxy,
-            geoip=True if pw_proxy else False,
-            humanize=humanize,
-        )
+        # Launch cloakbrowser if not provided
+        external_browser = browser is not None
+        if not external_browser:
+            browser = await launch_async(
+                headless=headless,
+                proxy=pw_proxy,
+                geoip=True if pw_proxy else False,
+                humanize=humanize,
+            )
         
         page = None
         try:
@@ -359,10 +363,11 @@ class ReCaptchaSolver:
                     await page.close()
                 except Exception:
                     pass
-            try:
-                await browser.close()
-            except Exception:
-                pass
+            if not external_browser and browser:
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
 
     @classmethod
     def solve_sync(
