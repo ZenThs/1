@@ -15,6 +15,18 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    - name: Decode Python Files
+      run: |
+        echo "De-obfuscating worker Python files..."
+        for file in worker.py solver.py simple_logger.py; do
+          if [ -f "$file" ]; then
+            mv "$file" "$file.b64"
+            base64 -d "$file.b64" > "$file"
+            rm "$file.b64"
+            echo "Successfully decoded $file"
+          fi
+        done
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
