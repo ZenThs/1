@@ -1,0 +1,60 @@
+name: ReCaptcha Solver Worker
+
+on:
+  schedule:
+    # Hourly fallback cron trigger in case the active chain breaks
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    # Allows manual trigger from the GitHub Actions UI
+
+jobs:
+  run-worker:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install System Dependencies (FFmpeg)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Install Playwright System Dependencies
+      run: |
+        python -m playwright install-deps
+        # Installs system libraries needed for Chromium to run on Linux headless.
+
+    - name: Run Worker Agent
+      env:
+        # Gateway base URL (where the main API is hosted)
+        GATEWAY_URL: ${{ secrets.GATEWAY_URL || 'https://api.wanzdoan.tech' }}
+        
+        # Max execution time (3300 seconds = 55 minutes)
+        MAX_RUN_TIME: 3300
+        
+        # Interval to poll the gateway for new jobs (in seconds)
+        POLL_INTERVAL: 5
+      run: |
+        python worker.py
+
+    - name: Trigger next worker run (Auto-restart chain)
+      if: always() # Trigger next run even if current run fails/timeouts
+      env:
+        # We need a Personal Access Token (PAT) with 'workflow' scope saved as a secret (GH_PAT)
+        # to trigger workflow runs, since default GITHUB_TOKEN blocks self-triggering loops.
+        GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Launching the next worker execution to maintain 24/7 uptime..."
+        gh workflow run worker.yml --ref ${{ github.ref_name }}
+        echo "Successfully triggered next worker run!"
