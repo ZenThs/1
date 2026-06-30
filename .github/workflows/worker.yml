@@ -65,6 +65,23 @@ jobs:
         python -m playwright install-deps
         # Installs system libraries needed for Chromium to run on Linux headless.
 
+    - name: Pre-download CloakBrowser Stealth Chromium
+      if: env.SKIP_WORKER != 'true'
+      run: |
+        echo "Pre-downloading CloakBrowser binary to avoid latency on first job..."
+        python -c "
+        import asyncio
+        from cloakbrowser import launch_async
+        async def main():
+            try:
+                b = await launch_async(headless=True)
+                await b.close()
+                print('CloakBrowser pre-download completed successfully.')
+            except Exception as e:
+                print(f'Warning: Pre-download encountered an issue: {e}')
+        asyncio.run(main())
+        "
+
     - name: Run Worker Agent
       if: env.SKIP_WORKER != 'true'
       env:
